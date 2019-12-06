@@ -1,0 +1,16 @@
+[package]
+name = "from_tuple"
+version = "0.1.0"
+authors = ["chip <chip@chip.sh>"]
+license = "Apache-2.0 OR MIT"
+description = "Derive structs from tuples."
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+itertools = "0.8"
+proc-macro2 = "1"
+quote = "1.0.2"
+syn = { version = "1", features = ["extra-traits"] }
