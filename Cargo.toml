@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["chip <chip@chip.sh>"]
 license = "Apache-2.0 OR MIT"
 description = "Derive structs from tuples."
+documentation = "https://docs.rs/from_tuple"
+homepage = "https://docs.rs/from_tuple"
+repository = "https://github.com/chippers/from_tuple"
 edition = "2018"
 
 [lib]
