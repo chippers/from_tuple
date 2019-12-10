@@ -2,7 +2,6 @@
 
 extern crate proc_macro;
 
-use itertools::Itertools;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use std::collections::HashSet;
@@ -105,28 +104,30 @@ fn do_from_tuple(input: DeriveInput) -> syn::Result<TokenStream> {
     if let Data::Struct(r#struct) = input.data {
         check_for_unique_fields(r#struct.fields.iter())?;
 
-        for fields in r#struct.fields.iter().permutations(r#struct.fields.len()) {
-            // variables used for destructuring the tuple
-            let dvars = (0..fields.len())
-                .map(|i| Ident::new(&format!("d{}", i), Span::call_site()))
-                .collect_vec();
+        let mut idx = 0;
+        let mut stack = vec![0; r#struct.fields.len()];
+        let mut fields = r#struct.fields.iter().collect::<Vec<_>>();
 
-            let idents = fields.iter().map(|&f| f.ident.as_ref());
-            let types = fields.iter().map(|&f| &f.ty);
+        // the first permutation is just the unmodified field order
+        permutations.push(impl_fields(&fields, &input.ident));
 
-            let struct_ident = &input.ident;
-            let destruct = quote! { (#(#dvars), *) };
-            let tuple = quote! { (#(#types),*) };
-            permutations.push(quote! {
-                impl From<#tuple> for #struct_ident {
-                    #[inline]
-                    fn from(#destruct: #tuple) -> Self {
-                        Self {
-                            #(#idents: #dvars),*
-                        }
-                    }
+        // heap's algorithm for generating all permutations
+        while idx < fields.len() {
+            if stack[idx] < idx {
+                if idx % 2 == 0 {
+                    fields.swap(0, idx);
+                } else {
+                    fields.swap(stack[idx], idx);
                 }
-            });
+
+                stack[idx] += 1;
+                idx = 0;
+
+                permutations.push(impl_fields(&fields, &input.ident));
+            } else {
+                stack[idx] = 0;
+                idx += 1;
+            }
         }
     } else {
         return Err(Error::new_spanned(
@@ -136,6 +137,29 @@ fn do_from_tuple(input: DeriveInput) -> syn::Result<TokenStream> {
     }
 
     Ok(quote! { #(#permutations)* })
+}
+
+fn impl_fields(fields: &[&Field], impl_for: &Ident) -> TokenStream {
+    // variables used for destructuring the tuple
+    let dvars = (0..fields.len())
+        .map(|i| Ident::new(&format!("d{}", i), Span::call_site()))
+        .collect::<Vec<_>>();
+
+    let idents = fields.iter().map(|&f| f.ident.as_ref());
+    let types = fields.iter().map(|&f| &f.ty);
+
+    let destruct = quote! { (#(#dvars), *) };
+    let tuple = quote! { (#(#types),*) };
+    quote! {
+        impl From<#tuple> for #impl_for {
+            #[inline]
+            fn from(#destruct: #tuple) -> Self {
+                Self {
+                    #(#idents: #dvars),*
+                }
+            }
+        }
+    }
 }
 
 fn check_for_unique_fields<'a>(fields: impl Iterator<Item = &'a Field>) -> syn::Result<()> {
@@ -153,14 +177,14 @@ fn check_for_unique_fields<'a>(fields: impl Iterator<Item = &'a Field>) -> syn::
     if repeats.len() == 0 {
         Ok(())
     } else {
-        Err(
-            repeats
-                .into_iter()
-                .fold1(|mut acc, e| {
-                    acc.combine(e);
-                    acc
-                })
-                .unwrap(), // safely unwrap because we know we had at least 1 item
-        )
+        let mut repeats = repeats.into_iter();
+        let first = repeats
+            .next()
+            .expect("repeats of non 0 length, but no first value");
+
+        Err(repeats.fold(first, |mut errors, error| {
+            errors.combine(error);
+            errors
+        }))
     }
 }
