@@ -7,7 +7,7 @@ for its fields.
 
 Find more information on the [`FromTuple` documentation page].
 
-[newtypes]: https://doc.rust-lang.org/rust-by-example/generics/new_types.html
+[newtype]: https://doc.rust-lang.org/rust-by-example/generics/new_types.html
 [`FromTuple` documentation page]: https://docs.rs/from_tuple/latest/from_tuple/derive.FromTuple.html
 
 ## Example
