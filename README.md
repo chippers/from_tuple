@@ -1,9 +1,8 @@
 # from_tuple
 
-Derive `From` tuples for `struct`s  that have unique field types.  This
-requires that the `struct` has unique types for all of it's fields.  Due to
-that requirement, it is most useful for struct utilizing the [newtype] pattern
-for its fields.
+Derive `From` tuples for `struct`s  that have unique field types.  Because all
+field types **must** be unique, it is most useful for `struct`s utilizing the
+[newtype] pattern for its fields.
 
 Find more information on the [`FromTuple` documentation page].
 
