@@ -1,6 +1,6 @@
 [package]
 name = "from_tuple"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["chip <chip@chip.sh>"]
 license = "Apache-2.0 OR MIT"
 description = "Derive structs from tuples."
