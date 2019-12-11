@@ -164,27 +164,24 @@ fn impl_fields(fields: &[&Field], impl_for: &Ident) -> TokenStream {
 
 fn check_for_unique_fields<'a>(fields: impl Iterator<Item = &'a Field>) -> syn::Result<()> {
     let mut seen = HashSet::new();
-    let mut repeats = Vec::new();
+    let mut error = None;
+
     for field in fields {
         if !seen.insert(field.ty.clone()) {
-            repeats.push(Error::new_spanned(
+            let new_error = Error::new_spanned(
                 field,
                 "Field types must be unique in a struct deriving `FromTuple`",
-            ))
+            );
+
+            match error {
+                None => error = Some(new_error),
+                Some(ref mut error) => error.combine(new_error),
+            }
         }
     }
 
-    if repeats.len() == 0 {
-        Ok(())
-    } else {
-        let mut repeats = repeats.into_iter();
-        let first = repeats
-            .next()
-            .expect("repeats of non 0 length, but no first value");
-
-        Err(repeats.fold(first, |mut errors, error| {
-            errors.combine(error);
-            errors
-        }))
+    match error {
+        None => Ok(()),
+        Some(error) => Err(error),
     }
 }
