@@ -2,10 +2,11 @@
 
 extern crate proc_macro;
 
-use proc_macro2::{Ident, Span, TokenStream};
+use proc_macro::TokenStream;
+use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::quote;
 use std::collections::HashSet;
-use syn::{parse_macro_input, Data, DeriveInput, Error, Field};
+use syn::{parse_macro_input, Data, DeriveInput, Error, Field, Fields};
 
 /// Derive `From` tuples for `struct`s  that have unique field types.
 ///
@@ -89,58 +90,33 @@ use syn::{parse_macro_input, Data, DeriveInput, Error, Field};
 /// be caught at compile time easily.  Additionally, I (personally) find it
 /// less *surprising* than it being order-dependant.
 #[proc_macro_derive(FromTuple)]
-pub fn from_tuple(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let derived = parse_macro_input!(input as DeriveInput);
-    match do_from_tuple(derived) {
-        Ok(ts) => ts,
-        Err(e) => e.to_compile_error(),
+pub fn from_tuple(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    if let Data::Struct(data) = &input.data {
+        if let Err(error) = verify_unique_field_types(&data.fields) {
+            return error.to_compile_error().into();
+        }
+
+        let mut impls = Vec::new();
+        permute(&data.fields, |fields| {
+            impls.push(impl_from_tuple(fields, &input))
+        });
+
+        quote! { #(#impls)* }
+    } else {
+        Error::new_spanned(input, "FromTuple currently only supports Struct").to_compile_error()
     }
     .into()
 }
 
-fn do_from_tuple(input: DeriveInput) -> syn::Result<TokenStream> {
-    let mut permutations = Vec::new();
-
-    if let Data::Struct(r#struct) = input.data {
-        check_for_unique_fields(r#struct.fields.iter())?;
-
-        let mut idx = 0;
-        let mut stack = vec![0; r#struct.fields.len()];
-        let mut fields = r#struct.fields.iter().collect::<Vec<_>>();
-
-        // the first permutation is just the unmodified field order
-        permutations.push(impl_fields(&fields, &input.ident));
-
-        // heap's algorithm for generating all permutations
-        while idx < fields.len() {
-            if stack[idx] < idx {
-                if idx % 2 == 0 {
-                    fields.swap(0, idx);
-                } else {
-                    fields.swap(stack[idx], idx);
-                }
-
-                stack[idx] += 1;
-                idx = 0;
-
-                permutations.push(impl_fields(&fields, &input.ident));
-            } else {
-                stack[idx] = 0;
-                idx += 1;
-            }
-        }
-    } else {
-        return Err(Error::new_spanned(
-            input,
-            "FromTuple currently only supports Struct",
-        ));
-    }
-
-    Ok(quote! { #(#permutations)* })
-}
-
-fn impl_fields(fields: &[&Field], impl_for: &Ident) -> TokenStream {
-    // variables used for destructuring the tuple
+/// `impl` `From` for a tuple of field types in the order of the fields passed
+///
+/// If the field types are `String`, `u8`, and `i32`, then the generated `impl`
+/// would be `impl From<(String, u8, i32)> for #struct` where `#struct` is the
+/// `struct` you are deriving on.
+fn impl_from_tuple(fields: &[&Field], data: &DeriveInput) -> TokenStream2 {
+    let struct_ident = &data.ident;
     let dvars = (0..fields.len())
         .map(|i| Ident::new(&format!("d{}", i), Span::call_site()))
         .collect::<Vec<_>>();
@@ -148,12 +124,16 @@ fn impl_fields(fields: &[&Field], impl_for: &Ident) -> TokenStream {
     let idents = fields.iter().map(|&f| f.ident.as_ref());
     let types = fields.iter().map(|&f| &f.ty);
 
-    let destruct = quote! { (#(#dvars), *) };
-    let tuple = quote! { (#(#types),*) };
+    let tuple_type = quote! { (#(#types),*) };
+    let destructed = quote! { (#(#dvars),*) };
+
     quote! {
-        impl From<#tuple> for #impl_for {
+        impl From<#tuple_type> for #struct_ident {
+
             #[inline]
-            fn from(#destruct: #tuple) -> Self {
+            fn from(tuple: #tuple_type) -> Self {
+                let #destructed = tuple;
+
                 Self {
                     #(#idents: #dvars),*
                 }
@@ -162,7 +142,8 @@ fn impl_fields(fields: &[&Field], impl_for: &Ident) -> TokenStream {
     }
 }
 
-fn check_for_unique_fields<'a>(fields: impl Iterator<Item = &'a Field>) -> syn::Result<()> {
+/// Create spanned errors for every non-unique field type
+fn verify_unique_field_types<'a>(fields: &syn::Fields) -> syn::Result<()> {
     let mut seen = HashSet::new();
     let mut error = None;
 
@@ -183,5 +164,41 @@ fn check_for_unique_fields<'a>(fields: impl Iterator<Item = &'a Field>) -> syn::
     match error {
         None => Ok(()),
         Some(error) => Err(error),
+    }
+}
+
+/// Pass all permutations of `syn::Fields` to a callback
+///
+/// Uses an iterative version of [`Heap's Algorithm`] to efficiently generate
+/// all permutations.
+///
+/// [`Heap's Algorithm`]: https://en.wikipedia.org/wiki/Heap%27s_algorithm
+fn permute<F>(fields: &Fields, mut callback: F)
+where
+    F: FnMut(&[&Field]),
+{
+    let mut data = fields.iter().collect::<Vec<_>>();
+
+    // the first permutation is just the unmodified field order
+    callback(&data);
+
+    let mut idx = 0;
+    let mut stack = vec![0; data.len()];
+    while idx < data.len() {
+        if stack[idx] >= idx {
+            stack[idx] = 0;
+            idx += 1;
+        } else {
+            if idx % 2 == 0 {
+                data.swap(0, idx);
+            } else {
+                data.swap(stack[idx], idx);
+            }
+
+            stack[idx] += 1;
+            idx = 0;
+
+            callback(&data);
+        }
     }
 }
