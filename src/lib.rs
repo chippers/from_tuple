@@ -1,14 +1,26 @@
-//! Traits transforming types from tuples
+#![doc = include_str!("../README.md")]
 
-extern crate proc_macro;
+#[cfg(any(feature = "strictly_heterogeneous", feature = "order_dependent"))]
+use {proc_macro::TokenStream, quote::quote, syn::parse_macro_input};
 
-use proc_macro::TokenStream;
-use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
-use quote::quote;
-use std::collections::HashSet;
-use syn::{parse_macro_input, Data, DeriveInput, Error, Field, Fields};
+#[cfg(feature = "order_dependent")]
+use {proc_macro2::TokenStream as TokenStream2, quote::ToTokens};
 
-/// Derive `From` tuples for `struct`s  that have unique field types.
+#[cfg(feature = "strictly_heterogeneous")]
+mod strictly_heterogeneous;
+
+#[cfg(feature = "strictly_heterogeneous")]
+use {
+    strictly_heterogeneous::{impl_from_tuple, permute, verify_unique_field_types},
+    syn::{Data, DeriveInput, Error},
+};
+
+/// Derives `n!` implementations of [`core::convert::From<...>`][core::convert::From] on `struct`s that have
+/// unique field types `T1,T2,...,Tn`.
+///
+/// More precisely, derives implementations of [`core::convert::From<...>`][core::convert::From]
+/// for all tuples-permuations of `T1,T2,...,Tn`, such as `(T1,T2,...,Tn-1,Tn)`, `(T1,T2,...,Tn,Tn-1)`,
+/// and so on.
 ///
 /// Because of the restriction that field types must be unique, this derive
 /// works best with structs that utilize [newtypes] for data.  Examples of
@@ -16,52 +28,45 @@ use syn::{parse_macro_input, Data, DeriveInput, Error, Field, Fields};
 /// inputs.
 ///
 /// [newtypes]: https://doc.rust-lang.org/rust-by-example/generics/new_types.html
-/// [`From`]: https://doc.rust-lang.org/core/convert/trait.From.html
 ///
 /// # Example
 ///
 /// ```
-/// use from_tuple::FromTuple;
+/// use from_tuple::FromStrictlyHeterogeneousTuple;
 ///
-/// #[derive(FromTuple)]
+/// #[derive(FromStrictlyHeterogeneousTuple)]
 /// struct Hello {
 ///     message: String,
 ///     time: i32,
 ///     counter: usize
 /// }
 ///
-/// fn main() {
-///     let h1: Hello = ("world".into(), -1, 42usize).into();
-///     assert_eq!(h1.time, -1);
-///     assert_eq!(h1.counter, 42);
-///     assert_eq!(&h1.message, "world");
+/// let h1: Hello = ("world".into(), -1, 42usize).into();
+/// assert_eq!(h1.time, -1);
+/// assert_eq!(h1.counter, 42);
+/// assert_eq!(&h1.message, "world");
 ///
-///     let h2: Hello = (1_000_000_usize, i32::min_value(), "greetings".into()).into();
-///     assert_eq!(h2.time, i32::min_value());
-///     assert_eq!(h2.counter, 1_000_000);
-///     assert_eq!(&h2.message, "greetings");
+/// let h2: Hello = (1_000_000_usize, i32::min_value(), "greetings".into()).into();
+/// assert_eq!(h2.time, i32::min_value());
+/// assert_eq!(h2.counter, 1_000_000);
+/// assert_eq!(&h2.message, "greetings");
 ///
-///     let h3: Hello = (-42, "hi".into(), 0usize).into();
-///     assert_eq!(h3.time, -42);
-///     assert_eq!(h3.counter, 0);
-///     assert_eq!(&h3.message, "hi");
-///
-/// }
+/// let h3: Hello = (-42, "hi".into(), 0usize).into();
+/// assert_eq!(h3.time, -42);
+/// assert_eq!(h3.counter, 0);
+/// assert_eq!(&h3.message, "hi");
 /// ```
 ///
-/// ## Non-unique structs
+/// ## Structs with non-unique field types
 ///
 /// Structs that have non-unique field types will fail to compile.  This is based
-/// on the actual type, and not the alias, so it will fail on e.g. [`c_uchar`]
+/// on the actual type, and not the alias, so it will fail on e.g. [`std::os::raw::c_uchar`]
 /// and [`u8`].
 ///
-/// [`c_uchar`]: https://doc.rust-lang.org/std/os/raw/type.c_uchar.html
-/// [`u8`]: https://doc.rust-lang.org/std/primitive.u8.html
-///
 /// ```compile_fail
-/// use from_tuple::FromTuple;
+/// use from_tuple::FromStrictlyHeterogeneousTuple;
 ///
-/// #[derive(FromTuple)]
+/// #[derive(FromStrictlyHeterogeneousTuple)]
 /// struct NonUnique {
 ///     first: String,
 ///     index: usize,
@@ -72,25 +77,26 @@ use syn::{parse_macro_input, Data, DeriveInput, Error, Field, Fields};
 /// Attempting to compile the previous example will result in
 ///
 /// ```bash
-/// error: Field types must be unique in a struct deriving `FromTuple`
+/// error: Field types must be unique in a struct deriving `FromStrictlyHeterogeneousTuple`
 ///   --> src/lib.rs:41:5
 ///    |
 /// 10 |     second: String,
 ///    |     ^^^^^^^^^^^^^^
 /// ```
 ///
-/// ### Considerations
+/// ### [`FromStrictlyHeterogeneousTuple`] vs [`OrderDependentFromTuple`]
 ///
-/// Support for non-unique types is under consideration for a future version,
-/// but has not been implemented because it requires order-dependant fields for
-/// structs - a *surprising* behaviour and can accidentally be broken by adding
+/// Dependence on order of fields in structs can be *surprising* behaviour as it may accidentally be broken by adding
 /// a field in the wrong position unknowingly.
 ///
 /// Requiring unique types may also be *surprising* behaviour, but is able to
-/// be caught at compile time easily.  Additionally, I (personally) find it
-/// less *surprising* than it being order-dependant.
-#[proc_macro_derive(FromTuple)]
-pub fn from_tuple(input: TokenStream) -> TokenStream {
+/// be caught at compile time easily.
+///
+/// Also, at the moment of writing, only [`OrderDependentFromTuple`] also derives generic trait implementations
+/// with the caveat that bounds must be only in the where clause.
+#[cfg(feature = "strictly_heterogeneous")]
+#[proc_macro_derive(FromStrictlyHeterogeneousTuple)]
+pub fn from_strictly_heterogeneous_tuple(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     if let Data::Struct(data) = &input.data {
@@ -105,100 +111,88 @@ pub fn from_tuple(input: TokenStream) -> TokenStream {
 
         quote! { #(#impls)* }
     } else {
-        Error::new_spanned(input, "FromTuple currently only supports Struct").to_compile_error()
+        Error::new_spanned(
+            input,
+            "FromStrictlyHeterogeneousTuple currently only supports Struct",
+        )
+        .to_compile_error()
     }
     .into()
 }
 
-/// `impl` `From` for a tuple of field types in the order of the fields passed
+/// Derives implementation of [`core::convert::From<(T1,T2,...,Tn)>`][core::convert::From] on `struct`s
+/// whose fields' types are `T1,T2,...,Tn`.
 ///
-/// If the field types are `String`, `u8`, and `i32`, then the generated `impl`
-/// would be `impl From<(String, u8, i32)> for #struct` where `#struct` is the
-/// `struct` you are deriving on.
-fn impl_from_tuple(fields: &[&Field], data: &DeriveInput) -> TokenStream2 {
-    let struct_ident = &data.ident;
-    let dvars = (0..fields.len())
-        .map(|i| Ident::new(&format!("d{}", i), Span::call_site()))
-        .collect::<Vec<_>>();
+/// # Example
+///
+/// ```
+/// use from_tuple::OrderDependentFromTuple;
+///
+/// #[derive(OrderDependentFromTuple)]
+/// struct Hello {
+///     offset: usize,
+///     len: usize,
+/// }
+///
+/// let strukt = Hello::from((234, 16));
+/// assert_eq!(strukt.offset, 234);
+/// assert_eq!(strukt.len, 16);
+/// ```
+///
+/// ### [`FromStrictlyHeterogeneousTuple`] vs [`OrderDependentFromTuple`]
+///
+/// Dependence on order of fields in structs can be *surprising* behaviour as it may accidentally be broken by adding
+/// a field in the wrong position unknowingly.
+///
+/// Requiring unique types may also be *surprising* behaviour, but is able to
+/// be caught at compile time easily.
+///
+/// Also, at the moment of writing, only [`OrderDependentFromTuple`] also derives generic trait implementations
+/// with the caveat that bounds must be only in the where clause
+#[cfg(feature = "order_dependent")]
+#[proc_macro_derive(OrderDependentFromTuple)]
+pub fn derive_from(item: TokenStream) -> TokenStream {
+    use syn::{token::Comma, Fields, ItemStruct};
 
-    let idents = fields.iter().map(|&f| f.ident.as_ref());
-    let types = fields.iter().map(|&f| &f.ty);
+    let item_struct = parse_macro_input!(item as ItemStruct);
+    let fields = match item_struct.fields {
+        Fields::Named(fields) => fields,
+        _ => panic!("expected named fields"),
+    };
 
-    let tuple_type = quote! { (#(#types),*) };
-    let destructed = quote! { (#(#dvars),*) };
+    let struct_name = item_struct.ident;
+    let where_clause = item_struct.generics.where_clause.as_ref();
+    let generics = &item_struct.generics;
+    let fields_iter = fields.named.iter();
+    let fields_tys_ts =
+        fields_iter
+            .clone()
+            .map(|f| f.ty.clone())
+            .fold(TokenStream2::new(), |mut ts, ty| {
+                let ty_ts: TokenStream2 = ty.into_token_stream();
+                ts.extend(ty_ts);
+                let comma_ts = Comma::default().into_token_stream();
+                ts.extend(comma_ts);
+                ts
+            });
+    let fields_names_ts =
+        fields_iter
+            .filter_map(|f| f.ident.clone())
+            .fold(TokenStream2::new(), |mut ts, ident| {
+                let ident_ts: TokenStream2 = ident.into_token_stream();
+                ts.extend(ident_ts);
+                let comma_ts = Comma::default().into_token_stream();
+                ts.extend(comma_ts);
+                ts
+            });
 
-    quote! {
-        impl From<#tuple_type> for #struct_ident {
-
-            #[inline]
-            fn from(tuple: #tuple_type) -> Self {
-                let #destructed = tuple;
-
-                Self {
-                    #(#idents: #dvars),*
-                }
+    let ts: TokenStream2 = quote! {
+        impl #generics ::core::convert::From<(#fields_tys_ts)> for #struct_name #generics
+        #where_clause {
+            fn from((#fields_names_ts): (#fields_tys_ts)) -> Self {
+                Self { #fields_names_ts }
             }
         }
-    }
-}
-
-/// Create spanned errors for every non-unique field type
-fn verify_unique_field_types<'a>(fields: &syn::Fields) -> syn::Result<()> {
-    let mut seen = HashSet::new();
-    let mut error = None;
-
-    for field in fields {
-        if !seen.insert(field.ty.clone()) {
-            let new_error = Error::new_spanned(
-                field,
-                "Field types must be unique in a struct deriving `FromTuple`",
-            );
-
-            match error {
-                None => error = Some(new_error),
-                Some(ref mut error) => error.combine(new_error),
-            }
-        }
-    }
-
-    match error {
-        None => Ok(()),
-        Some(error) => Err(error),
-    }
-}
-
-/// Pass all permutations of `syn::Fields` to a callback
-///
-/// Uses an iterative version of [`Heap's Algorithm`] to efficiently generate
-/// all permutations.
-///
-/// [`Heap's Algorithm`]: https://en.wikipedia.org/wiki/Heap%27s_algorithm
-fn permute<F>(fields: &Fields, mut callback: F)
-where
-    F: FnMut(&[&Field]),
-{
-    let mut data = fields.iter().collect::<Vec<_>>();
-
-    // the first permutation is just the unmodified field order
-    callback(&data);
-
-    let mut idx = 0;
-    let mut stack = vec![0; data.len()];
-    while idx < data.len() {
-        if stack[idx] >= idx {
-            stack[idx] = 0;
-            idx += 1;
-        } else {
-            if idx % 2 == 0 {
-                data.swap(0, idx);
-            } else {
-                data.swap(stack[idx], idx);
-            }
-
-            stack[idx] += 1;
-            idx = 0;
-
-            callback(&data);
-        }
-    }
+    };
+    ts.into()
 }

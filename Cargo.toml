@@ -1,18 +1,24 @@
 [package]
 name = "from_tuple"
-version = "0.1.2"
-authors = ["chip <chip@chip.sh>"]
+version = "1.0.0"
+authors = ["chip <chip@chip.sh>", "JohnScience <demenev.dmitriy1@gmail.com>"]
 license = "Apache-2.0 OR MIT"
 description = "Derive structs from tuples."
 documentation = "https://docs.rs/from_tuple"
 homepage = "https://docs.rs/from_tuple"
 repository = "https://github.com/chippers/from_tuple"
-edition = "2018"
+edition = "2021"
 
 [lib]
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1"
-quote = "1.0.2"
-syn = { version = "1", features = ["extra-traits"] }
+proc-macro2 = "1.0.36"
+quote = "1.0.15"
+syn = { version = "1.0.2" }
+
+
+[features]
+default = ["strictly_heterogeneous", "order_dependent"]
+strictly_heterogeneous = ["syn/extra-traits"]
+order_dependent = ["syn/full", "syn/printing"]

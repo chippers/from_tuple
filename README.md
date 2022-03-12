@@ -1,41 +1,64 @@
 # from_tuple
 
-Derive `From` tuples for `struct`s  that have unique field types.  Because all
-field types **must** be unique, it is most useful for `struct`s utilizing the
-[newtype] pattern for its fields.
+[Derive macros] generating implementations of [`core::convert:From<...>`][`From`] on `struct`s.
 
-Find more information on the [`FromTuple` documentation page].
+Find more information on the documentation pages of [`FromStrictlyHeterogeneousTuple`] and [`OrderDependentFromTuple`].
 
-[newtype]: https://doc.rust-lang.org/rust-by-example/generics/new_types.html
-[`FromTuple` documentation page]: https://docs.rs/from_tuple/latest/from_tuple/derive.FromTuple.html
+## Examples
 
-## Example
+* [`FromStrictlyHeterogeneousTuple`]
 
 ```rust
-use from_tuple::FromTuple;
+use from_tuple::FromStrictlyHeterogeneousTuple;
 
-#[derive(FromTuple)]
+#[derive(FromStrictlyHeterogeneousTuple)]
 struct Hello {
     message: String,
     time: i32,
     counter: usize
 }
 
-fn main() {
-    let hello: Hello = (-42, "hi".to_string(), 0usize).into();
+let t1: (String,i32,usize) = ("world".into(), -1, 42usize);
+let h1: Hello = t1.into();
+assert_eq!(h1.time, -1);
+assert_eq!(h1.counter, 42);
+assert_eq!(&h1.message, "world");
 
-    assert_eq!(&hello.message, "hi");
-    assert_eq!(hello.time, -42);
-    assert_eq!(hello.counter, 0);
+let t2: (usize,i32,String) = (1_000_000_usize, i32::min_value(), "greetings".into());
+let h2: Hello = t2.into();
+assert_eq!(h2.time, i32::min_value());
+assert_eq!(h2.counter, 1_000_000);
+assert_eq!(&h2.message, "greetings");
+
+let t3: (i32,String,usize) = (-42, "hi".into(), 0usize);
+let h3: Hello = t3.into();
+assert_eq!(h3.time, -42);
+assert_eq!(h3.counter, 0);
+assert_eq!(&h3.message, "hi");
+```
+
+* [`OrderDependentFromTuple`]
+
+```rust
+use from_tuple::OrderDependentFromTuple;
+
+#[derive(OrderDependentFromTuple)]
+struct Hello {
+    offset: usize,
+    len: usize,
 }
+
+let strukt = Hello::from((234, 16));
+assert_eq!(strukt.offset, 234);
+assert_eq!(strukt.len, 16);
 ```
 
 ## License
 
 Licensed under either of
 
- * Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+ * Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+ * MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
 
 at your option.
 
@@ -44,3 +67,8 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in this project by you, as defined in the Apache-2.0 license,
 shall be dual licensed as above, without any additional terms or conditions.
+
+[Derive macros]: https://doc.rust-lang.org/reference/procedural-macros.html#derive-macros
+[`From`]: https://doc.rust-lang.org/nightly/core/convert/trait.From.html
+[`FromStrictlyHeterogeneousTuple`]: https://docs.rs/from_tuple/latest/from_tuple/derive.FromStrictlyHeterogeneousTuple.html
+[`OrderDependentFromTuple`]: https://docs.rs/from_tuple/latest/from_tuple/derive.OrderDependentFromTuple.html
