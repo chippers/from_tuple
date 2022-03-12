@@ -125,7 +125,7 @@ pub fn from_strictly_heterogeneous_tuple(input: TokenStream) -> TokenStream {
 }
 
 #[cfg(feature="order_dependent")]
-#[proc_macro_derive(FromTuple)]
+#[proc_macro_derive(OrderDependentFromTuple)]
 pub fn derive_from(item: TokenStream) -> TokenStream {
     use syn::{ItemStruct, Fields, token::Comma};
 
@@ -136,8 +136,8 @@ pub fn derive_from(item: TokenStream) -> TokenStream {
     };
 
     let struct_name = item_struct.ident;
-    let where_clause = item_struct.generics.where_clause.clone();
-    let generics = item_struct.generics;
+    let where_clause = item_struct.generics.where_clause.as_ref();
+    let generics = &item_struct.generics;
     let fields_iter = fields.named.iter();
     let fields_tys_ts = fields_iter.clone()
         .map(|f| f.ty.clone())
