@@ -18,17 +18,20 @@ struct Hello {
     counter: usize
 }
 
-let h1: Hello = ("world".into(), -1, 42usize).into();
+let t1: (String,i32,usize) = ("world".into(), -1, 42usize);
+let h1: Hello = t1.into();
 assert_eq!(h1.time, -1);
 assert_eq!(h1.counter, 42);
 assert_eq!(&h1.message, "world");
 
-let h2: Hello = (1_000_000_usize, i32::min_value(), "greetings".into()).into();
+let t2: (usize,i32,String) = (1_000_000_usize, i32::min_value(), "greetings".into());
+let h2: Hello = t2.into();
 assert_eq!(h2.time, i32::min_value());
 assert_eq!(h2.counter, 1_000_000);
 assert_eq!(&h2.message, "greetings");
 
-let h3: Hello = (-42, "hi".into(), 0usize).into();
+let t3: (i32,String,usize) = (-42, "hi".into(), 0usize);
+let h3: Hello = t3.into();
 assert_eq!(h3.time, -42);
 assert_eq!(h3.counter, 0);
 assert_eq!(&h3.message, "hi");
