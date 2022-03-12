@@ -94,9 +94,9 @@ use {
 ///    |     ^^^^^^^^^^^^^^
 /// ```
 ///
-/// ### `FromStrictlyHeterogeneousTuple` vs `OrderDependentFromTuple`
+/// ### [`FromStrictlyHeterogeneousTuple`] vs [`OrderDependentFromTuple`]
 ///
-/// Order-dependant fields for structs can be *surprising* behaviour as it may accidentally be broken by adding
+/// Dependence on order of fields in structs can be *surprising* behaviour as it may accidentally be broken by adding
 /// a field in the wrong position unknowingly.
 ///
 /// Requiring unique types may also be *surprising* behaviour, but is able to
@@ -124,6 +124,32 @@ pub fn from_strictly_heterogeneous_tuple(input: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Derives implementation of [`core::convert::From<(T1,T2,...,Tn)>`][core::convert::From] on `struct`s
+/// whose fields' types are `T1,T2,...,Tn`.
+/// 
+/// # Example
+/// 
+/// ```
+/// use from_tuple::OrderDependentFromTuple;
+/// 
+/// #[derive(OrderDependentFromTuple)]
+/// struct Hello {
+///     offset: usize,
+///     len: usize,
+/// }
+/// 
+/// let strukt = Hello::from((234, 16));
+/// assert_eq!(strukt.offset, 234);
+/// assert_eq!(strukt.len, 16);
+/// ```
+/// 
+/// ### [`FromStrictlyHeterogeneousTuple`] vs [`OrderDependentFromTuple`]
+///
+/// Dependence on order of fields in structs can be *surprising* behaviour as it may accidentally be broken by adding
+/// a field in the wrong position unknowingly.
+///
+/// Requiring unique types may also be *surprising* behaviour, but is able to
+/// be caught at compile time easily.
 #[cfg(feature="order_dependent")]
 #[proc_macro_derive(OrderDependentFromTuple)]
 pub fn derive_from(item: TokenStream) -> TokenStream {
