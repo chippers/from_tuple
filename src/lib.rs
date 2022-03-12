@@ -1,4 +1,5 @@
-#[doc = include_str!("../README.md")]
+#![doc = include_str!("../README.md")]
+
 #[cfg(any(feature = "strictly_heterogeneous", feature = "order_dependent"))]
 use {proc_macro::TokenStream, quote::quote, syn::parse_macro_input};
 
