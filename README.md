@@ -1,20 +1,18 @@
 # from_tuple
 
-Derive `From` tuples for `struct`s  that have unique field types.  Because all
-field types **must** be unique, it is most useful for `struct`s utilizing the
-[newtype] pattern for its fields.
+[Derive macros] generating implementations of `core::convert:From<...>` on `struct`s.
 
-Find more information on the [`FromTuple` documentation page].
+Find more information on the documentation pages of [`FromStrictlyHeterogeneousTuple`] and [`OrderDependentFromTuple`].
 
-[newtype]: https://doc.rust-lang.org/rust-by-example/generics/new_types.html
-[`FromTuple` documentation page]: https://docs.rs/from_tuple/latest/from_tuple/derive.FromTuple.html
+[`FromStrictlyHeterogeneousTuple`]: https://docs.rs/from_tuple/latest/from_tuple/derive.FromStrictlyHeterogeneousTuple.html
+[`OrderDependentFromTuple`]: https://docs.rs/from_tuple/latest/from_tuple/derive.OrderDependentFromTuple.html
 
 ## Example
 
 ```rust
-use from_tuple::FromTuple;
+use from_tuple::FromStrictlyHeterogeneousTuple;
 
-#[derive(FromTuple)]
+#[derive(FromStrictlyHeterogeneousTuple)]
 struct Hello {
     message: String,
     time: i32,
@@ -44,3 +42,5 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in this project by you, as defined in the Apache-2.0 license,
 shall be dual licensed as above, without any additional terms or conditions.
+
+[Derive macros]: https://doc.rust-lang.org/reference/procedural-macros.html#derive-macros
