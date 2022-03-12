@@ -13,6 +13,11 @@ edition = "2018"
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1"
-quote = "1.0.2"
-syn = { version = "1", features = ["extra-traits"] }
+proc-macro2 = "1.0.36"
+quote = "1.0.15"
+syn = { version = "1.0.2" }
+
+
+[features]
+default = ["unique_fields"]
+unique_fields = ["syn/extra-traits"]
