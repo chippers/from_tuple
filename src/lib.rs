@@ -102,6 +102,8 @@ use {
 /// Requiring unique types may also be *surprising* behaviour, but is able to
 /// be caught at compile time easily.
 /// 
+/// Also, at the moment of writing, only [`OrderDependentFromTuple`] also derives generic trait implementations
+/// with the caveat that bounds must be only in the where clause.
 #[cfg(feature = "strictly_heterogeneous")]
 #[proc_macro_derive(FromStrictlyHeterogeneousTuple)]
 pub fn from_strictly_heterogeneous_tuple(input: TokenStream) -> TokenStream {
@@ -150,6 +152,9 @@ pub fn from_strictly_heterogeneous_tuple(input: TokenStream) -> TokenStream {
 ///
 /// Requiring unique types may also be *surprising* behaviour, but is able to
 /// be caught at compile time easily.
+/// 
+/// Also, at the moment of writing, only [`OrderDependentFromTuple`] also derives generic trait implementations
+/// with the caveat that bounds must be only in the where clause
 #[cfg(feature="order_dependent")]
 #[proc_macro_derive(OrderDependentFromTuple)]
 pub fn derive_from(item: TokenStream) -> TokenStream {
