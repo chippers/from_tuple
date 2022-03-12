@@ -1,12 +1,26 @@
-//! Traits transforming types from tuples
+#[doc = include_str!("../README.md")]
 
-use proc_macro::TokenStream;
-use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Error};
+#[cfg(any(feature = "strictly_heterogeneous", feature = "order_dependent"))]
+use {
+    proc_macro::TokenStream,
+    quote::quote,
+    syn::parse_macro_input,
+};
 
+#[cfg(feature="order_dependent")]
+use {
+    quote::ToTokens,
+    proc_macro2::TokenStream as TokenStream2,
+};
+
+#[cfg(feature = "strictly_heterogeneous")]
 mod strictly_heterogeneous;
 
-use strictly_heterogeneous::{impl_from_tuple, permute, verify_unique_field_types};
+#[cfg(feature = "strictly_heterogeneous")]
+use {
+    syn::{Data, DeriveInput, Error},
+    strictly_heterogeneous::{impl_from_tuple, permute, verify_unique_field_types}
+};
 
 /// Derives `n!` implementations of [`core::convert::From<...>`][core::convert::From] on `struct`s that have 
 /// unique field types `T1,T2,...,Tn`.
@@ -88,8 +102,9 @@ use strictly_heterogeneous::{impl_from_tuple, permute, verify_unique_field_types
 /// Requiring unique types may also be *surprising* behaviour, but is able to
 /// be caught at compile time easily.
 /// 
+#[cfg(feature = "strictly_heterogeneous")]
 #[proc_macro_derive(FromStrictlyHeterogeneousTuple)]
-pub fn from_tuple(input: TokenStream) -> TokenStream {
+pub fn from_strictly_heterogeneous_tuple(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     if let Data::Struct(data) = &input.data {
@@ -107,4 +122,50 @@ pub fn from_tuple(input: TokenStream) -> TokenStream {
         Error::new_spanned(input, "FromStrictlyHeterogeneousTuple currently only supports Struct").to_compile_error()
     }
     .into()
+}
+
+#[cfg(feature="order_dependent")]
+#[proc_macro_derive(FromTuple)]
+pub fn derive_from(item: TokenStream) -> TokenStream {
+    use syn::{ItemStruct, Fields, token::Comma};
+
+    let item_struct = parse_macro_input!(item as ItemStruct);
+    let fields = match item_struct.fields {
+        Fields::Named(fields) => fields,
+        _ => panic!("expected named fields"),
+    };
+
+    let struct_name = item_struct.ident;
+    let where_clause = item_struct.generics.where_clause.clone();
+    let generics = item_struct.generics;
+    let fields_iter = fields.named.iter();
+    let fields_tys_ts = fields_iter.clone()
+        .map(|f| f.ty.clone())
+        .fold(TokenStream2::new(), |mut ts,ty| {
+            let ty_ts: TokenStream2 = ty.into_token_stream();
+            ts.extend(ty_ts);
+            let comma_ts = Comma::default().into_token_stream();
+            ts.extend(comma_ts);
+            ts
+        });
+    let fields_names_ts = fields_iter
+        .filter_map(|f| f.ident.clone())
+        .fold(TokenStream2::new(), |mut ts,ident| {
+            let ident_ts: TokenStream2 = ident.into_token_stream();
+            ts.extend(ident_ts);
+            let comma_ts = Comma::default().into_token_stream();
+            ts.extend(comma_ts);
+            ts
+        });
+
+
+    let ts: TokenStream2 = quote! {
+        impl #generics ::core::convert::From<(#fields_tys_ts)> for #struct_name #generics
+        #where_clause {
+            fn from((#fields_names_ts): (#fields_tys_ts)) -> Self {
+                Self { #fields_names_ts }
+            }
+        }
+    };
+    ts.into()
 }
