@@ -1,7 +1,7 @@
 [package]
 name = "from_tuple"
 version = "1.0.0"
-authors = ["chip <chip@chip.sh>"]
+authors = ["chip <chip@chip.sh>", "JohnScience <demenev.dmitriy1@gmail.com>"]
 license = "Apache-2.0 OR MIT"
 description = "Derive structs from tuples."
 documentation = "https://docs.rs/from_tuple"
